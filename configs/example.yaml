@@ -1,0 +1,27 @@
+seed: 42
+space: {x: 100, y: 100, z: 20}
+time: {dt: 1.0, steps: 20}
+emitters:
+  - id: "E0"
+    proto: "wifi"
+    tx_dbm: -10
+    pos: "random"
+scanner:
+  id: "S0"
+  start: "random"
+  motion: {model: "lawnmower", speed: 5.0, lane_spacing: 10.0, altitude: 5.0}
+  sample_rate_hz: 1.0
+channel:
+  pl0_db: 40
+  n: 2.0
+  shadow_sigma_db: 0.0
+  awgn_sigma_db: 0.0
+algos:
+  rssi2d: {min_d_m: 0.5, max_d_m: 150}
+  multilateration: {robust_loss: "huber", huber_delta: 1.0}
+  kf: {dt: 1.0, q_pos: 0.8, q_vel: 0.5, r_pos: 3.0}
+  pf: {mode: "grid", grid_res: 5.0, N: 8000}
+  gp: {length_scale: 10.0, noise: 2.0}
+io:
+  out_csv: "runs/run001.csv"
+  out_dir: "runs"
