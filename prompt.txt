@@ -1,0 +1,161 @@
+
+
+## **Prompt for THINKING — Full Implementation of Drone-based Signal Scanning System Simulator & Algorithms**
+
+We require a **complete, modular Python implementation** of our autonomous drone-based scanning system for locating missing persons via WiFi and BLE signal detection. The deliverable must include:
+
+---
+
+### **1. System Overview**
+
+The simulation must model the **real-world architecture** from our project spec:
+
+* **Environment**: 3D space (100 m × 100 m × 20 m).
+* **Emitter(s)**: Representing phones or BLE devices with fixed random position, realistic Tx power, Gaussian white noise, and chosen protocol (WiFi or BLE). Packets must mimic realistic probe requests (WiFi) or advertisements (BLE).
+* **Scanner(s)**: Representing the drone’s scanning unit, starting at a random position, moving per a configurable flight pattern (lawnmower, random walk, or waypoint path), collecting RSSI measurements with position and timestamp.
+* **Output**: CSV file with all scan data:
+  `ts, x, y, z, rssi, mac_hash, proto, scanner_id, emitter_id(optional)`
+
+---
+
+### **2. Simulator Architecture**
+
+**Modules**:
+
+```
+core/         # Environment, timebase, entity base classes
+protocols/    # WiFi, BLE packet simulators
+channel/      # Path-loss, AWGN, shadowing, multipath models
+actors/       # Emitter, Scanner, Motion models
+algos/        # Multilateration, KF/EKF, Particle Filter, Gaussian Process
+io/           # CSV writer, config loader
+visualize/    # 2D/3D plots, heatmaps
+cli/          # Run simulation, run post-processing
+tests/        # Unit & E2E tests
+```
+
+**Modularity**:
+
+* Each algorithmic block is replaceable via config.
+* Future support for multiple drones and emitters without major refactoring.
+* Configurable parameters in YAML/TOML.
+
+---
+
+### **3. Signal & Channel Model**
+
+* **Path-loss model**: Log-distance with parameters `pl0_db`, `n`, `d0_m`.
+* **Noise**: Gaussian white noise (σ configurable).
+* **Shadowing**: Log-normal shadowing (σ configurable).
+* **RSSI inversion**:
+
+  $$
+  \hat d = d_0 \cdot 10^{\frac{P_{\text{tx}} - \text{PL}_0 - \text{RSSI}}{10\,n}}
+  $$
+
+  Clamp to `[min_d_m, max_d_m]`.
+
+---
+
+### **4. Flight & Motion Models**
+
+Implement:
+
+* **Lawnmower (grid)** pattern (default for initial scan).
+* **Random walk**.
+* **Waypoint path**.
+  Configurable speed, altitude, spacing.
+
+---
+
+### **5. Online Localization Algorithm**
+
+Processing chain for real-time estimation:
+
+1. **RSSI→Distance** using path-loss inversion.
+2. **Multilateration**:
+
+   * Weighted Least Squares (Huber or soft-L1 robust loss).
+   * Output: `(x,y,z)`, covariance, residual RMS.
+3. **KF/EKF Smoother**:
+
+   * State: `[x,y,z,vx,vy,vz]`, constant velocity model.
+   * Tunable `Q` and `R` matrices.
+4. **Particle Filter / Grid Heatmap**:
+
+   * Grid or particle representation of position probability.
+   * Update likelihood from RSSI model.
+   * Maintain normalized weights and produce a real-time heatmap.
+
+---
+
+### **6. Offline Post-Processing**
+
+* **Gaussian Process Regression (GPR)**: Fit `f(x,y)=RSSI` over scanned area, output smooth heatmap and uncertainty map.
+* Identify peak RSSI locations for final refined position.
+* Save:
+
+  * PNG heatmap (mean)
+  * PNG uncertainty map (std)
+  * JSON with peak coordinates and confidence score.
+
+---
+
+### **7. Configuration**
+
+Example YAML:
+
+```yaml
+seed: 42
+space: {x: 100, y: 100, z: 20}
+time: {dt: 0.5, steps: 800}
+emitters:
+  - id: "E0"
+    proto: "wifi"
+    tx_dbm: -10
+    pos: "random"
+scanner:
+  id: "S0"
+  start: "random"
+  motion: {model: "lawnmower", speed: 3.0, lane_spacing: 10.0, altitude: 5.0}
+  sample_rate_hz: 5.0
+channel:
+  pl0_db: 40
+  n: 2.4
+  shadow_sigma_db: 2.0
+  awgn_sigma_db: 1.0
+algos:
+  rssi2d: {min_d_m: 0.5, max_d_m: 150}
+  multilateration: {robust_loss: "huber", huber_delta: 1.0}
+  kf: {dt: 0.5, q_pos: 0.8, q_vel: 0.5, r_pos: 3.0}
+  pf: {mode: "grid", grid_res: 2.0, N: 8000}
+  gp: {length_scale: 10.0, noise: 2.0}
+io:
+  out_csv: "runs/run001.csv"
+  out_dir: "runs/"
+```
+
+---
+
+### **8. Deliverables**
+
+* Fully functional Python code implementing all above components.
+* CLI:
+
+  * `run_sim.py --config config.yaml` → simulate & output CSV.
+  * `run_post.py --config config.yaml` → process CSV & produce heatmap + estimate.
+* Unit & integration tests.
+* Documentation: README with quickstart, config reference, diagrams.
+* Example config files for single/multi-emitter scenarios.
+
+---
+
+### **9. Acceptance Criteria**
+
+* Simulation produces reproducible CSV given fixed seed.
+* Online chain (RSSI→Multilateration→KF→PF) outputs live position & heatmap.
+* Offline GP refines location and outputs final peak <10 m from truth in synthetic tests.
+* Swapping any motion model, channel model, or algorithm via config requires no code changes.
+
+---
+Open REPO in my github, implement all of the above in it.  
